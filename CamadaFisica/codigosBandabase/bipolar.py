@@ -1,4 +1,4 @@
-def CodificacaoBipolar(Tam, mensagem,V):
+def codificadorBipolar(Tam, mensagem,V):
 
     sinalBipolar = []
     amplitude = 1
