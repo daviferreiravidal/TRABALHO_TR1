@@ -12,7 +12,7 @@ def modulacaoASK(sinal, f, V):
 
     return portadora
 
-def deemodulacaoASK(portadora, V, f, amostrasPorBit = 100,):
+def demodulacaoASK(portadora, V, f, amostrasPorBit = 100,):
     bits = []
     nBits = len(portadora) // amostrasPorBit # vai dividir o tamanho da portadora e arrendondar para baixo
 
