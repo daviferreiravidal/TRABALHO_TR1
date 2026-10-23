@@ -14,35 +14,6 @@ QAM32 = {
     "11100": (-1, -3), "11101": (-3, -3), "11110": (-1, -5), "11111": (-5, -3),
 }
 
-def pad_bits(bits, m=5, fill="0"):
-    """Completa o trem de bits até múltiplo de m. Retorna (bits, n_pad)."""
-    n_pad = -len(bits) % m
-    return bits + fill * n_pad, n_pad
-
-def serial_to_parallel(bits, m=5):
-    """Corta o trem de bits em grupos de m bits (um por símbolo)."""
-    return [bits[k:k+m] for k in range(0, len(bits), m)]
-
-def map_symbols(groups):
-    """Associação de coordenadas: grupo de 5 bits -> (x, y)."""
-    return [QAM32[g] for g in groups]
-
-def modulate(symbols, fc=4, fs=400, T=1.0):
-    """Gera x(t), y(t) e S(t) a partir da lista de (x, y)."""
-    import numpy as np
-    N = len(symbols)
-    t = np.arange(0, N * T, T / fs)
-    idx = np.minimum((t / T).astype(int), N - 1)
-    x = np.array([s[0] for s in symbols])[idx]
-    y = np.array([s[1] for s in symbols])[idx]
-    wc = 2 * np.pi * fc / T
-    S = x * np.cos(wc * t) - y * np.sin(wc * t)
-    return t, x, y, S
-
-#---------------------------//------------------------------------------------------
-
-#meus códigos
-
 def modulacao32QAM(bits, fc = 4, As=400):
 
 
