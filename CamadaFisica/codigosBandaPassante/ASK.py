@@ -7,7 +7,7 @@ def modulacaoASK(sinal, f, V):
     portadora = []
 
     for bit in sinal:
-        for j in range(100):
+        for j in range(100):                                            # faz 100 amostras por bit
             portadora.append (V * bit * mt.sin(2 * mt.pi * f * j/100))
 
     return portadora
