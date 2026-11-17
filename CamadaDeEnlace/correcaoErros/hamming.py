@@ -55,13 +55,16 @@ def hammingCode(bits):
 
     return codeWord
 
-#retorna a posição do bit errado. Se retornar 0 todos os bits estão corretos
+#retorna a posição do bit errado. Se retornar 0 todos os bits estão corretoscle
 def hammingCodeReceptor(bits):
     paridades = []
-
+    mensagem = []
+    print(f"bites: , {bits}")
     for i in range(1,len(bits)+1):
         if i > 0 and (i & (i - 1)) == 0:      #se for uma potência de 2
             paridades.append(calcularParidade(i,bits))
+        else:
+            mensagem.append(bits[i-1])
 
     paridadesInversa = paridades[::-1]
     stringParidades = "".join(paridadesInversa)
@@ -73,7 +76,7 @@ def hammingCodeReceptor(bits):
     else:
         print("chegou certinho!")
 
-    return resultado
+    return mensagem, resultado
 
 #testes
 if __name__ == "__main__":
@@ -82,7 +85,9 @@ if __name__ == "__main__":
     print("code hamming = " + "".join(codeWord) + "\n")
 
     print("caso positivo:")
-    hammingCodeReceptor(codeWord)
+    bits_recebidos,_ = hammingCodeReceptor(codeWord)
+
+    print(bits_recebidos)
 
     print("caso negativo:")
     codeWord[4] = '1' if codeWord[4] == '0' else '0'    # flip no 5º bit

@@ -27,8 +27,10 @@ import contextlib
 import io
 
 import numpy as np
+
 from CamadaFisica import *
 from CamadaDeEnlace import *
+
 
 ENQUADRAMENTOS = ("contagem", "insercao")
 EDCS = ("checksum", "crc", "hamming")
@@ -185,7 +187,7 @@ def _fisica_rx(sinal, n_pad, codificacao, modulacao, p):
 # Transmissão
 # --------------------------------------------------------------------------
 def simular_transmissao(mensagem, tamQuadro, tamEdc, enquadramento, edc,
-                        codificacao=None, modulacao=None, sigma=0.0,
+                        codificacao=None, modulacao=None, sigma=0.0, media=0.0,
                         semente=None, params_fisica=None, verbose=False):
     """
     Gera os quadros e, opcionalmente, os transmite pela camada física.
@@ -204,7 +206,7 @@ def simular_transmissao(mensagem, tamQuadro, tamEdc, enquadramento, edc,
     codificacao   : banda base  -> "nrz_polar" | "bipolar" | "manchester"
     modulacao     : passa-banda -> "ASK" | "FSK" | "8PSK" | "32QAM"
     sigma         : desvio padrão do ruído AWGN, na mesma unidade da amplitude
-                    (0 = canal sem ruído)
+    media         : média do ruído AWGN (sigma=0 e media=0 = canal sem ruído)
     semente       : semente do ruído (None = aleatório). Cada quadro usa
                     semente + índice, para o ruído não se repetir entre quadros.
     params_fisica : dict para sobrescrever PARAMS_FISICA (V, f, f1, f2, ...)
@@ -216,13 +218,15 @@ def simular_transmissao(mensagem, tamQuadro, tamEdc, enquadramento, edc,
             "sinal_tx": sinal gerado pelo transmissor (sem ruído)
             "sinal_rx": sinal que chega ao receptor (sinal_tx + AWGN)
             "n_pad"   : bits de padding do modulador (8PSK/32QAM; senão 0)
+            "quadro"  : bits do quadro que foi transmitido
         Esta lista pode ser passada direto para simular_recepcao.
     """
     fisica = _tem_fisica(codificacao, modulacao)
     if sigma < 0:
         raise ValueError("sigma deve ser >= 0")
-    if sigma > 0 and not fisica:
-        raise ValueError("sigma só tem efeito com codificacao ou modulacao")
+    ruido = sigma > 0 or media != 0
+    if ruido and not fisica:
+        raise ValueError("ruído (sigma/media) só tem efeito com codificacao ou modulacao")
     p = _params(params_fisica)
 
     mensagem = "".join(str(x) for x in mensagem)
@@ -266,12 +270,13 @@ def simular_transmissao(mensagem, tamQuadro, tamEdc, enquadramento, edc,
 
         if fisica:
             sinal_tx, n_pad = _fisica_tx(quadro, codificacao, modulacao, p)
-            if sigma > 0:    # o meio soma o ruído AWGN ao sinal
-                sinal_rx = AWGN.canalAwgn(sinal_tx, 0.0, sigma,
+            if ruido:        # o meio soma o ruído AWGN ao sinal
+                sinal_rx = AWGN.canalAwgn(sinal_tx, media, sigma,
                                            None if semente is None else semente + idx)
             else:
                 sinal_rx = sinal_tx.copy()
-            saida.append({"sinal_tx": sinal_tx, "sinal_rx": sinal_rx, "n_pad": n_pad})
+            saida.append({"sinal_tx": sinal_tx, "sinal_rx": sinal_rx,
+                          "n_pad": n_pad, "quadro": quadro})
 
         if verbose:
             print(f"[{idx}] payload={len(fragmento)}b padding={padding}b "
@@ -280,7 +285,7 @@ def simular_transmissao(mensagem, tamQuadro, tamEdc, enquadramento, edc,
             if fisica:
                 nome = codificacao or modulacao
                 print(f"    {nome}: {len(sinal_tx)} amostras, n_pad={n_pad}, "
-                      f"sigma={sigma}")
+                      f"media={media}, sigma={sigma}")
 
     return saida if fisica else quadros
 
@@ -298,8 +303,8 @@ def _desenquadrar(quadro, enquadramento):
 
 
 def _verificar_edc(dados, tamEdc, edc):
-    """Confere o EDC. Retorna (payload, ok, erro_pos)."""
-    erro_pos = None
+    """Confere o EDC. Retorna (payload, ok, erro_pos, corrigido)."""
+    erro_pos, corrigido = None, False
     if edc == "checksum":
         ok = checksum.checksum_receptor(tamEdc, dados) == "QUADRO SEM ERROS"
         payload = dados[:-tamEdc]
@@ -313,9 +318,10 @@ def _verificar_edc(dados, tamEdc, edc):
         cw = list(dados)
         if 0 < erro_pos <= len(cw):                      # corrige 1 bit
             cw[erro_pos - 1] = "1" if cw[erro_pos - 1] == "0" else "0"
+            corrigido = True
         payload = "".join(b for i, b in enumerate(cw, start=1)
                           if i & (i - 1) != 0)
-    return payload, ok, erro_pos
+    return payload, ok, erro_pos, corrigido
 
 
 def simular_recepcao(quadros, tamEdc, enquadramento, edc,
@@ -328,7 +334,8 @@ def simular_recepcao(quadros, tamEdc, enquadramento, edc,
                     com "sinal_rx" quando há camada física)
     codificacao / modulacao / params_fisica: os MESMOS usados na transmissão.
 
-    Retorna lista de dicts: {"payload", "ok", "erro_pos"}.
+    Retorna lista de dicts: {"payload", "ok", "erro_pos", "corrigido", "quadro_rx"}.
+    - quadro_rx: bits do quadro após a camada física (antes do desenquadramento).
     - payload None significa que o quadro nem chegou a ser desenquadrado.
     - erro_pos só é preenchido no Hamming; nesse caso 1 bit errado é corrigido
       (ok fica False porque houve erro, mas o payload já vem corrigido).
@@ -349,13 +356,15 @@ def simular_recepcao(quadros, tamEdc, enquadramento, edc,
 
         dados = _desenquadrar(q, enquadramento)
         if dados is None:
-            resultados.append({"payload": None, "ok": False, "erro_pos": None})
+            resultados.append({"payload": None, "ok": False, "erro_pos": None,
+                               "corrigido": False, "quadro_rx": q})
             continue
         try:
-            payload, ok, erro_pos = _verificar_edc(dados, tamEdc, edc)
+            payload, ok, erro_pos, corrigido = _verificar_edc(dados, tamEdc, edc)
         except (ValueError, IndexError):   # quadro corrompido demais para o EDC
-            payload, ok, erro_pos = None, False, None
-        resultados.append({"payload": payload, "ok": ok, "erro_pos": erro_pos})
+            payload, ok, erro_pos, corrigido = None, False, None, False
+        resultados.append({"payload": payload, "ok": ok, "erro_pos": erro_pos,
+                           "corrigido": corrigido, "quadro_rx": q})
     return resultados
 
 

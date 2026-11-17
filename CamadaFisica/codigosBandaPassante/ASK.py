@@ -3,12 +3,12 @@ import math as mt
 #f a frenquecia do sinal
 #V a amplitude em volts da nossa portadora
 
-def modulacaoASK(sinal, f, V):
+def modulacaoASK(sinal, f):
     portadora = []
 
     for bit in sinal:
         for j in range(100):                                            # faz 100 amostras por bit
-            portadora.append (V * bit * mt.sin(2 * mt.pi * f * j/100))
+            portadora.append (bit * mt.sin(2 * mt.pi * f * j/100))
 
     return portadora
 
@@ -24,9 +24,6 @@ def demodulacaoASK(portadora, V, f, amostrasPorBit = 100,):
         
         a = 2 * soma / amostrasPorBit      # amplitude estimada (com sinal)
 
-        if abs(a) > (V / 2):
-            bits.append(1)
-        else:
-            bits.append(0)
+        bits.append(a)
 
     return bits
