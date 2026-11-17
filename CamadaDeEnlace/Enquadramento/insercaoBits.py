@@ -20,10 +20,10 @@ def build_frame(payload):
     return FLAG + bit_stuff(payload) + FLAG
 
 def frame_message(bits, max_payload=64):
-    """Fragmenta a mensagem em payloads de até max_payload bits e gera o fluxo de quadros."""
-    frames = [build_frame(bits[k:k + max_payload])
-              for k in range(0, len(bits), max_payload)]
-    return "".join(frames)
+    """Fragmenta a mensagem em payloads de até max_payload bits
+    e devolve a LISTA de quadros (um item por quadro)."""
+    return [build_frame(bits[k:k + max_payload])
+            for k in range(0, len(bits), max_payload)]
 
 # ---------------- Receptor ----------------
 def extract_frames(stream):
@@ -51,19 +51,24 @@ def extract_frames(stream):
                 ones = 0
     return payloads
 
-def deframe_message(stream):
+def deframe_message(frames):
+    """Recebe a lista de quadros, concatena em um fluxo e recupera a mensagem."""
+    stream = "".join(frames) if isinstance(frames, list) else frames
     return "".join(extract_frames(stream))
 
 # ---------------- Teste ----------------
-msg = "0000010011111100100100010111010" + "1111111111" + "01111110"
-tx = frame_message(msg, max_payload=16)
-rx = deframe_message(tx)
+if __name__ == "__main__":
+    msg = "0000010011111100100100010111010" + "1111111111" + "01111110"
+    frames = frame_message(msg, max_payload=16)
+    print(frames)
+    rx = deframe_message(frames)
 
-print("Fluxo transmitido:", tx)
-print("Mensagem original:", msg)
-print("Mensagem recebida:", rx)
-print("OK?:", rx == msg)
+    print("Quadros transmitidos:")
+    for i, f in enumerate(frames):
+        print(f"  [{i}] {f}")
+    print("Mensagem original:", msg)
+    print("Mensagem recebida:", rx)
+    print("OK?:", rx == msg)
 
-# Verificação do stuffing
-print(bit_stuff("0111111011111"))   # -> 01111101011111 0? veja a saída
-assert "111111" not in bit_stuff("1" * 40)
+    print(bit_stuff("0111111011111"))
+    assert "111111" not in bit_stuff("1" * 40)

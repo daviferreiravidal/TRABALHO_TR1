@@ -1,41 +1,63 @@
-POLY = 0x04C11DB7
-r = 31
-    
-def Meucrc_bits(bits):
-    
-    bits_aux = bits + (r * '0')
+POLY = 0xD
+R = 4
+MASK = 0xF
+
+def crc_transmissor(bits):
+    bits_aux = bits + ('0' * R)
+
+    # janela inicial: primeiros 32 bits da mensagem aumentada
+    crc = int(bits_aux[:4], 2)
+
+    # traz um bit por vez (um deslocamento por bit restante)
+    for b in range(3, len(bits_aux)):
+        top = (crc >> 3) & 1                        # bit que vai "transbordar"
+        crc = ((crc << 1) | int(bits_aux[b])) & MASK # desloca, traz o próximo bit, limita a 32 bits
+        if top:
+            crc ^= POLY
+
+    return crc
+
+def crc_receptor(bits):
+
+    rest = int(bits[:4],2)
+
+    for b in range(3, len(bits)):
+        top = (rest >> 3) & 1
+        rest = ((rest << 1) | int(bits[b])) & MASK
+        if top:
+            rest ^= POLY
+
+    print(rest)
+
+    if rest == 0:
+        return True
+    else:
+        return False
 
 
-    crc = int(bits_aux[0:32],2)     # crc recebe os n primeiros bits da mensagem, onde n é o tamanho do gerador
-                                        # e transfora a string em um número binário
+bits = "100100"
+result = crc_transmissor(bits)
+print(hex(result))                 # 0x569796c2
+print(format(result, '04b'))      # 01010110100101111001011011000010
 
-    print("começo: " + bin(crc))
+"""""
+#caso bom
+print(bits + " + " + format(result, '032b'))
+bits = bits + format(result, '032b')
 
-    for b in range(31,len(bits_aux),1):
-        print("etapa: ",b-2)
-        top = (crc >> 31) & 1            #top recebe o MSB   
-        if top:                         #se for 1 
-            crc ^= POLY                 #faz o xor com o gerador
-            print("crc ^ POLY = ", bin(crc))
-        else:
-            crc ^= 0x00000000                 #faz xor com 0
-            print("crc ^ 0 = " + bin(crc))
+print(bits)
 
-        print("crc << 1 = " + bin(crc))
-        if b < (len(bits_aux)-1):
-            crc = crc << 1                        #desloca para eliminar o transbordo adicionando um 0 pela esquerda
-            if int(bits_aux[b+1]):                #verifica quem é o próximo que vai descer na divisão
-                crc = crc | 0x00000001                   #se for um flipa o LSB
+if crc_receptor(bits):
+    print("bits sem erro")
+else:
+    print("bits com erro")
 
-        print("fim da etapa crc = " + bin(crc))
-            
-    return crc              # complemento final
-            
-"""def crc32_str(bits):
-    CRC como string de 32 bits (MSB primeiro, ordem de transmissão).
-    return format(crc_bits(bits), "04b")"""
+#caso ruim
 
+bits_corrompidos = "00110" + format(result, '032b')
 
-bits  = "10110"
+if crc_receptor(bits_corrompidos):
+    print("bits sem erro")
+else:
+    print("bits com erro")"""
 
-print(hex(Meucrc_bits(bits)))

@@ -3,6 +3,7 @@ R = 32
 MASK = 0xFFFFFFFF
 
 def crc_transmissor(bits):
+    """Calcula o CRC de uma mensagem."""
     bits_aux = bits + ('0' * R)
 
     # janela inicial: primeiros 32 bits da mensagem aumentada
@@ -18,7 +19,7 @@ def crc_transmissor(bits):
     return crc
 
 def crc_receptor(bits):
-
+    """Verifica se o CRC de uma mensagem recebida é válido."""
     rest = int(bits[:32],2)
 
     for b in range(32, len(bits)):
@@ -27,36 +28,21 @@ def crc_receptor(bits):
         if top:
             rest ^= POLY
 
-    print(rest)
-
     if rest == 0:
         return True
     else:
         return False
 
 
-bits = "10110"
-result = crc_transmissor(bits)
-print(hex(result))                 # 0x569796c2
-print(format(result, '032b'))      # 01010110100101111001011011000010
+if __name__ == "__main__":
+    bits = "10110"
+    result = crc_transmissor(bits)
+    print(hex(result))
+    print(format(result, "032b"))
 
-#caso bom
-print(bits + " + " + format(result, '032b'))
-bits = bits + format(result, '032b')
+    bits_com_crc = bits + format(result, "032b")
+    print("bits sem erro" if crc_receptor(bits_com_crc) else "bits com erro")
 
-print(bits)
-
-if crc_receptor(bits):
-    print("bits sem erro")
-else:
-    print("bits com erro")
-
-#caso ruim
-
-bits_corrompidos = "00110" + format(result, '032b')
-
-if crc_receptor(bits_corrompidos):
-    print("bits sem erro")
-else:
-    print("bits com erro")
+    bits_corrompidos = "00110" + format(result, "032b")
+    print("bits sem erro" if crc_receptor(bits_corrompidos) else "bits com erro")
 

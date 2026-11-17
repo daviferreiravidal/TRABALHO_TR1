@@ -1,5 +1,6 @@
 
 def qtdBase2(n):
+    """Retorna a quantidade de bases de 2 em n."""
     qtd = 0
     for i in range(1,n+1):
         if i > 0 and (i & (i - 1)) == 0:   #faz o bitwise bit a bit. números que são potências de dois possuem apenas 1 bit 1
@@ -9,6 +10,7 @@ def qtdBase2(n):
 
 # retorna o tamanho da nossa palavra de código
 def tamCodeWord(n):
+    """Retorna o tamanho da codeWord de uma mensagem de n bits."""
     m = n
     m_anterior = 0
     while m_anterior != m:                  #se True significa que m não tem como mais crescer
@@ -19,7 +21,7 @@ def tamCodeWord(n):
     return m
 
 def calcularParidade(P, codeWord):
-
+    """Calcula o bit de paridade P de uma codeWord."""
     intCodeWord = [int(x) for x in codeWord]        #converte a string de bits em uma lista de inteiros
     paridade = 0
     for i in range(P-1,len(codeWord),2*(P)):        #percorre nosso codeWord somando P casas apartir de P e pulando P casas depois
@@ -32,7 +34,7 @@ def calcularParidade(P, codeWord):
     
 #retornar a codeWord de uma mansagem de bits
 def hammingCode(bits):
-
+    """Retorna a codeWord de uma mensagem de bits usando o código de Hamming."""
     n = len(bits)
     m = tamCodeWord(n)
 
@@ -74,15 +76,16 @@ def hammingCodeReceptor(bits):
     return resultado
 
 #testes
-bits = "1101001"
-codeWord = hammingCode(bits)
-print("code hamming = " + "".join(codeWord) + "\n")
+if __name__ == "__main__":
+    bits = "10101111"
+    codeWord = hammingCode(bits)
+    print("code hamming = " + "".join(codeWord) + "\n")
 
-print("caso positivo:")
-hammingCodeReceptor(codeWord)
+    print("caso positivo:")
+    hammingCodeReceptor(codeWord)
 
-print("caso negativo:")
-codeWord[4] = '1' if codeWord[4] == '0' else '0'    # flip no 5º bit
-hammingCodeReceptor(codeWord)
+    print("caso negativo:")
+    codeWord[4] = '1' if codeWord[4] == '0' else '0'    # flip no 5º bit
+    hammingCodeReceptor(codeWord)
 
 

@@ -1,6 +1,4 @@
-import math as mt
 import numpy as np
-import matplotlib as mp
 
 #BitMapping que vai nos dar o canal i X(t) e o canal q y(t) para cada sequência de bits
 QAM32 = {
