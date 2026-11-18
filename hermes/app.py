@@ -11,7 +11,8 @@ from .janelas import JanelaRX, JanelaTX
 
 LEGENDA = (
     "Detalhes do quadro:\n"
-    "  roxo      flags (inserção de bits) ou cabeçalho (contagem)\n"
+    "  roxo      flags (inserção de bits/bytes) ou cabeçalho (contagem)\n"
+    "  azul-petróleo  byte ESC inserido (inserção de bytes)\n"
     "  vermelho  bits do EDC (paridade, checksum, CRC ou Hamming)\n"
     "  fundo vermelho  bit que chegou diferente do enviado\n\n"
     "Status no receptor:\n"
@@ -86,7 +87,7 @@ class AppHermes(Gtk.Application):
         self.rx.status[0] = "Recebendo..."
         self.tx.console.log(
             f"TX {len(texto.encode('utf-8'))} bytes | {cfg.enquadramento} | {cfg.edc} | "
-            f"{cfg.fisica} | {cfg.bytes_por_quadro} B/quadro | σ={cfg.sigma:g} | "
+            f"{cfg.codificacao} + {cfg.modulacao} | {cfg.bytes_por_quadro} B/quadro | σ={cfg.sigma:g} | "
             f"semente={cfg.semente}")
         threading.Thread(target=self._simular, args=(texto, cfg), daemon=True).start()
 
@@ -109,8 +110,9 @@ class AppHermes(Gtk.Application):
         self.tx.mostrar(tx, cfg)
         self.rx.mostrar(tx, rx, sinal_rx, cfg, est)
 
-        self.tx.console.log(f"{len(tx['quadros'])} quadro(s), {len(tx['fluxo'])} bits, "
-                            f"{len(tx['sinal'])} amostras enviados ao canal ({dt:.2f} s)")
+        self.tx.console.log(f"{len(tx['quadros'])} quadro(s): {len(tx['fluxo'])} bits -> "
+                            f"{len(tx['codificado'])} chips ({cfg.codificacao}) -> "
+                            f"{len(tx['sinal'])} amostras ({cfg.modulacao}) ({dt:.2f} s)")
         nivel = None if est["mensagem_ok"] else "aviso"
         self.rx.console.log(
             f"RX {est['recebidos']}/{est['enviados']} quadro(s): ok={est['ok']} "

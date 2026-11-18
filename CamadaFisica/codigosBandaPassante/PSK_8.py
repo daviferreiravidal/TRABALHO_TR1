@@ -2,6 +2,8 @@
 import math as mt
 import numpy as np
 
+from .niveis import bits_para_chips, chips_para_bits
+
 cos_pi4 = mt.cos(mt.pi / 4)
 sin_pi4 = mt.sin(mt.pi / 4)
 
@@ -75,3 +77,24 @@ def decide(x_hat, y_hat):
 def parallel_to_serial(groups, n_pad=0):
     bits = "".join(groups)
     return bits[:len(bits) - n_pad] if n_pad else bits
+
+
+# ---------------------------------------------------------------------------
+# Modulação do sinal JÁ CODIFICADO (NRZ polar, Manchester ou Bipolar)
+#
+# Cada chip do sinal codificado vira o número do seu nível em binário
+# (2 níveis -> 1 bit por chip; 3 níveis, bipolar -> 2 bits por chip).
+# Esses bits são agrupados de 3 em 3 e cada grupo vira um ponto da constelação.
+# ---------------------------------------------------------------------------
+def modula8PSK(sinal_codificado, V, niveis, fc=4, As=400):
+    """Devolve (portadora, n_pad). n_pad = bits 0 acrescentados no último símbolo."""
+    bits = chips_para_bits(sinal_codificado, V, niveis)
+    n_pad, _t, _x, _y, _simbolos, S = modulacao8PSK(bits, fc, As)
+    return V * S, n_pad
+
+
+def demodula8PSK(portadora, V, niveis, n_pad, fc=4, As=400):
+    """Devolve o sinal codificado recuperado (um nível por chip)."""
+    x_hat, y_hat = demodulate(np.asarray(portadora) / V, fc, As)
+    bits = parallel_to_serial(decide(x_hat, y_hat), n_pad)
+    return bits_para_chips(bits, V, niveis)

@@ -1,4 +1,9 @@
 # manchester.py
+# Manchester: cada bit vira 2 meios-bits (chips): 1 -> (+V, -V), 0 -> (-V, +V)
+# Para modular por portadora usamos amostrasPorBit = CHIPS_POR_BIT = 2,
+# ou seja, um valor por meio-bit; o modulador cuida das amostras da portadora.
+NIVEIS = (-1, +1)        # níveis possíveis do sinal, em unidades de V
+CHIPS_POR_BIT = 2
 
 def codificadorManchester(mensagem, V, amostrasPorBit = 100):
     sinalManchester = []

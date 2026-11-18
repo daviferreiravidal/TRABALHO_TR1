@@ -1,5 +1,7 @@
 import numpy as np
 
+from .niveis import bits_para_chips, chips_para_bits
+
 #BitMapping que vai nos dar o canal i X(t) e o canal q y(t) para cada sequência de bits
 QAM32 = {
     "00000": (+1, +1), "00001": (+3, +1), "00010": (+3, +5), "00011": (+5, +1),
@@ -71,3 +73,24 @@ def decide(x_hat, y_hat):
 def parallel_to_serial(groups, n_pad=0):
     bits = "".join(groups)
     return bits[:len(bits) - n_pad] if n_pad else bits
+
+
+# ---------------------------------------------------------------------------
+# Modulação do sinal JÁ CODIFICADO (NRZ polar, Manchester ou Bipolar)
+#
+# Cada chip do sinal codificado vira o número do seu nível em binário
+# (2 níveis -> 1 bit por chip; 3 níveis, bipolar -> 2 bits por chip).
+# Esses bits são agrupados de 5 em 5 e cada grupo vira um ponto da constelação.
+# ---------------------------------------------------------------------------
+def modula32QAM(sinal_codificado, V, niveis, fc=4, As=400):
+    """Devolve (portadora, n_pad). n_pad = bits 0 acrescentados no último símbolo."""
+    bits = chips_para_bits(sinal_codificado, V, niveis)
+    n_pad, _t, _x, _y, _simbolos, S = modulacao32QAM(bits, fc, As)
+    return V * S, n_pad
+
+
+def demodula32QAM(portadora, V, niveis, n_pad, fc=4, As=400):
+    """Devolve o sinal codificado recuperado (um nível por chip)."""
+    x_hat, y_hat = demodulate(np.asarray(portadora) / V, fc, As)
+    bits = parallel_to_serial(decide(x_hat, y_hat), n_pad)
+    return bits_para_chips(bits, V, niveis)

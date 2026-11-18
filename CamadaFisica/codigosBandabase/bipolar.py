@@ -1,3 +1,7 @@
+# Bipolar (AMI): bit 0 -> 0, bit 1 -> +V e -V alternados (1 chip por bit)
+NIVEIS = (-1, 0, +1)     # níveis possíveis do sinal, em unidades de V
+CHIPS_POR_BIT = 1
+
 def codificadorBipolar(Tam, mensagem,V):
 
     sinalBipolar = []

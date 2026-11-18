@@ -1,3 +1,7 @@
+# NRZ polar: bit 1 -> +V, bit 0 -> -V (1 chip por bit)
+NIVEIS = (-1, +1)        # níveis possíveis do sinal, em unidades de V
+CHIPS_POR_BIT = 1
+
 def codificadorNRZPolar( mensagem, V):
     Tam = len(mensagem)
     sinalNRZ = []

@@ -1,17 +1,19 @@
 """
 Simulador de redes simples: camada de enlace + camada física + canal AWGN.
 
-Só a lógica (sem interface gráfica). A GUI está em gui.py.
+Só a lógica (sem interface gráfica). A GUI está no pacote hermes/.
 
-Transmissor, para cada quadro:
-    texto -> bits -> fatia de N bits (completa com 0s)
-          -> EDC  -> enquadramento -> fluxo de bits
-Depois, o fluxo inteiro passa pela camada física (banda base OU modulação)
-e pelo canal AWGN.
+Transmissor:
+    texto -> bits -> fatias de N bits (completa com 0s)
+          -> EDC -> enquadramento               (um quadro por fatia)
+          -> fluxo de bits (todos os quadros em sequência)
+          -> CODIFICAÇÃO de banda base           (NRZ polar | Manchester | Bipolar)
+          -> MODULAÇÃO por portadora             (Nenhuma | ASK | FSK | 8-PSK | 32-QAM)
+          -> canal AWGN
 
 Receptor (caminho inverso):
-    sinal -> decodificação/demodulação -> fluxo de bits
-          -> desenquadramento -> EDC -> bits -> texto
+    sinal -> demodulação -> sinal codificado recuperado -> decodificação
+          -> fluxo de bits -> desenquadramento -> EDC -> bits -> texto
 
 Convenção usada em todo o projeto: bits são SEMPRE strings, ex.: "0110".
 """
@@ -20,7 +22,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from CamadaDeEnlace.Enquadramento import contagem_de_caracteres, insercaoBits
+from CamadaDeEnlace.Enquadramento import contagem_de_caracteres, insercaoBits, insercaoBytes
 from CamadaDeEnlace.deteccaoErros import paridade, checksum, crc
 from CamadaDeEnlace.correcaoErros import hamming
 from CamadaFisica import AWGN
@@ -35,7 +37,8 @@ from CamadaFisica.codigosBandaPassante import ASK, FSK, PSK_8, QAM_32
 class Config:
     enquadramento: str = "Inserção de bits"
     edc: str = "CRC-32"
-    fisica: str = "NRZ polar"
+    codificacao: str = "NRZ polar"
+    modulacao: str = "ASK"
     bytes_por_quadro: int = 4     # tamanho da carga útil de cada quadro
     sigma: float = 0.0            # desvio padrão do ruído AWGN
     V: float = 1.0                # amplitude do sinal
@@ -57,7 +60,8 @@ def validar(texto, cfg):
         raise ValueError(f"mensagem com {n} bytes (máximo {MAX_BYTES_MENSAGEM})")
     for nome, tabela, valor in (("enquadramento", ENQUADRAMENTOS, cfg.enquadramento),
                                 ("EDC", EDCS, cfg.edc),
-                                ("camada física", FISICAS, cfg.fisica)):
+                                ("codificação", CODIFICACOES, cfg.codificacao),
+                                ("modulação", MODULACOES, cfg.modulacao)):
         if valor not in tabela:
             raise ValueError(f"{nome} desconhecido: {valor!r}")
     if not 1 <= cfg.bytes_por_quadro <= MAX_BYTES_QUADRO:
@@ -69,9 +73,9 @@ def validar(texto, cfg):
 
 
 # Parâmetros fixos da camada física (simples de propósito)
-AMOSTRAS_POR_BIT = 100     # Manchester, ASK, FSK
-F_ASK = 4                  # ciclos da portadora por bit
-F1_FSK, F2_FSK = 8, 4      # ciclos por bit para o '1' e para o '0'
+AMOSTRAS_POR_CHIP = 100    # banda base, ASK e FSK: amostras por chip do sinal codificado
+F_ASK = 4                  # ASK: ciclos da portadora por chip
+F_MIN_FSK, F_MAX_FSK = 4, 8  # FSK: faixa de frequências (ciclos por chip)
 FC = 4                     # 8-PSK / 32-QAM: ciclos por símbolo
 AMOSTRAS_POR_SIMBOLO = 400 # 8-PSK / 32-QAM
 SEGMENTO_CHECKSUM = 8      # bits
@@ -112,52 +116,65 @@ EDCS = {
 }
 
 # Enquadramento: tx(dados) -> quadro ;  rx(fluxo) -> lista de quadros (só o conteúdo)
+def _completa_byte(dados):
+    return dados + "0" * (-len(dados) % 8)      # enquadramentos orientados a byte
+
 def _contagem_tx(dados):
-    dados = dados + "0" * (-len(dados) % 8)     # a contagem é em bytes
+    dados = _completa_byte(dados)
     return contagem_de_caracteres.cc_transmissor(len(dados) // 8, dados)
 
 ENQUADRAMENTOS = {
     "Contagem de caracteres": (_contagem_tx, contagem_de_caracteres.cc_receptor),
+    "Inserção de bytes": (lambda d: insercaoBytes.build_frame(_completa_byte(d)),
+                          insercaoBytes.extract_frames),
     "Inserção de bits": (insercaoBits.build_frame, insercaoBits.extract_frames),
 }
 
-# Camada física: tx(bits, V) -> (sinal, n_pad) ;  rx(sinal, V, n_pad) -> bits
-def _psk_tx(bits, V):
-    n_pad, *_, S = PSK_8.modulacao8PSK(bits, FC, AMOSTRAS_POR_SIMBOLO)
-    return V * S, n_pad
-
-def _psk_rx(sinal, V, n_pad):
-    x, y = PSK_8.demodulate(np.asarray(sinal) / V, FC, AMOSTRAS_POR_SIMBOLO)
-    return PSK_8.parallel_to_serial(PSK_8.decide(x, y), n_pad)
-
-def _qam_tx(bits, V):
-    n_pad, *_, S = QAM_32.modulacao32QAM(bits, FC, AMOSTRAS_POR_SIMBOLO)
-    return V * S, n_pad
-
-def _qam_rx(sinal, V, n_pad):
-    x, y = QAM_32.demodulate(np.asarray(sinal) / V, FC, AMOSTRAS_POR_SIMBOLO)
-    return QAM_32.parallel_to_serial(QAM_32.decide(x, y), n_pad)
-
-FISICAS = {
-    # ---- banda base ----
+# Codificação de banda base:
+#   cod(bits, V) -> sinal codificado (um nível por chip: -V, 0 ou +V)
+#   dec(sinal codificado, V) -> bits
+#   niveis: níveis possíveis do código (o modulador precisa saber)
+CODIFICACOES = {
     "NRZ polar": (
-        lambda b, V: (nrz_polar.codificadorNRZPolar(b, V), 0),
-        lambda s, V, n: nrz_polar.decodificadorNRZPolar(s, V)),
-    "Bipolar": (
-        lambda b, V: (bipolar.codificadorBipolar(len(b), b, V), 0),
-        lambda s, V, n: bipolar.decodificadorBipolar(s, V)),
+        lambda b, V: nrz_polar.codificadorNRZPolar(b, V),
+        lambda s, V: nrz_polar.decodificadorNRZPolar(s, V),
+        nrz_polar.NIVEIS),
     "Manchester": (
-        lambda b, V: (manchester.codificadorManchester(b, V, AMOSTRAS_POR_BIT), 0),
-        lambda s, V, n: manchester.decodificadorManchester(s, V, AMOSTRAS_POR_BIT)),
-    # ---- modulação por portadora ----
+        lambda b, V: manchester.codificadorManchester(b, V, manchester.CHIPS_POR_BIT),
+        lambda s, V: manchester.decodificadorManchester(s, V, manchester.CHIPS_POR_BIT),
+        manchester.NIVEIS),
+    "Bipolar": (
+        lambda b, V: bipolar.codificadorBipolar(len(b), b, V),
+        lambda s, V: bipolar.decodificadorBipolar(s, V),
+        bipolar.NIVEIS),
+}
+
+# Modulação por portadora (todas recebem o sinal JÁ codificado):
+#   mod(sinal_codificado, V, niveis) -> (portadora, n_pad)
+#   dem(portadora, V, niveis, n_pad) -> sinal codificado recuperado
+def _banda_base_tx(sinal, V, niveis):
+    """Sem portadora: cada chip vira AMOSTRAS_POR_CHIP amostras do mesmo nível."""
+    return np.repeat(np.asarray(sinal, dtype=float), AMOSTRAS_POR_CHIP), 0
+
+def _banda_base_rx(sinal, V, niveis, n_pad):
+    """Integra (faz a média de) cada chip; o decodificador decide o bit."""
+    n = len(sinal) // AMOSTRAS_POR_CHIP
+    return list(np.asarray(sinal[:n * AMOSTRAS_POR_CHIP]).reshape(n, -1).mean(axis=1))
+
+MODULACOES = {
+    "Nenhuma (banda base)": (_banda_base_tx, _banda_base_rx),
     "ASK": (
-        lambda b, V: (ASK.modulacaoASK(b, F_ASK, V, AMOSTRAS_POR_BIT), 0),
-        lambda s, V, n: ASK.demodulacaoASK(s, V, F_ASK, AMOSTRAS_POR_BIT)),
+        lambda s, V, nv: ASK.modulaASK(s, V, nv, F_ASK, AMOSTRAS_POR_CHIP),
+        lambda p, V, nv, n: ASK.demodulaASK(p, V, nv, n, F_ASK, AMOSTRAS_POR_CHIP)),
     "FSK": (
-        lambda b, V: (FSK.modulacaoFSK(V, F1_FSK, F2_FSK, b, AMOSTRAS_POR_BIT), 0),
-        lambda s, V, n: FSK.demodulacaoFSK(s, V, F1_FSK, F2_FSK, AMOSTRAS_POR_BIT)),
-    "8-PSK": (_psk_tx, _psk_rx),
-    "32-QAM": (_qam_tx, _qam_rx),
+        lambda s, V, nv: FSK.modulaFSK(s, V, nv, AMOSTRAS_POR_CHIP, F_MIN_FSK, F_MAX_FSK),
+        lambda p, V, nv, n: FSK.demodulaFSK(p, V, nv, n, AMOSTRAS_POR_CHIP, F_MIN_FSK, F_MAX_FSK)),
+    "8-PSK": (
+        lambda s, V, nv: PSK_8.modula8PSK(s, V, nv, FC, AMOSTRAS_POR_SIMBOLO),
+        lambda p, V, nv, n: PSK_8.demodula8PSK(p, V, nv, n, FC, AMOSTRAS_POR_SIMBOLO)),
+    "32-QAM": (
+        lambda s, V, nv: QAM_32.modula32QAM(s, V, nv, FC, AMOSTRAS_POR_SIMBOLO),
+        lambda p, V, nv, n: QAM_32.demodula32QAM(p, V, nv, n, FC, AMOSTRAS_POR_SIMBOLO)),
 }
 
 
@@ -182,7 +199,8 @@ def transmitir(texto, cfg):
     validar(texto, cfg)
     edc_tx, _, _ = EDCS[cfg.edc]
     enq_tx, _ = ENQUADRAMENTOS[cfg.enquadramento]
-    fis_tx, _ = FISICAS[cfg.fisica]
+    cod, _, niveis = CODIFICACOES[cfg.codificacao]
+    mod, _ = MODULACOES[cfg.modulacao]
 
     bits = texto_para_bits(texto)
     n = 8 * cfg.bytes_por_quadro
@@ -195,8 +213,10 @@ def transmitir(texto, cfg):
         quadros.append({"payload": payload, "dados": dados, "quadro": enq_tx(dados)})
 
     fluxo = "".join(q["quadro"] for q in quadros)
-    sinal, n_pad = fis_tx(fluxo, cfg.V)
+    codificado = cod(fluxo, cfg.V)                     # 1º codifica (banda base)...
+    sinal, n_pad = mod(codificado, cfg.V, niveis)      # ...depois modula a portadora
     return {"bits": bits, "quadros": quadros, "fluxo": fluxo,
+            "codificado": np.asarray(codificado, dtype=float),
             "sinal": np.asarray(sinal, dtype=float), "n_pad": n_pad}
 
 
@@ -213,14 +233,16 @@ def receber(sinal, n_pad, cfg):
     """Devolve um dict com tudo que o receptor recuperou (para mostrar na GUI)."""
     _, edc_rx, edc_tam = EDCS[cfg.edc]
     _, enq_rx = ENQUADRAMENTOS[cfg.enquadramento]
-    _, fis_rx = FISICAS[cfg.fisica]
+    _, dec, niveis = CODIFICACOES[cfg.codificacao]
+    _, dem = MODULACOES[cfg.modulacao]
 
-    fluxo = fis_rx(sinal, cfg.V, n_pad)
+    codificado = dem(sinal, cfg.V, niveis, n_pad)      # 1º demodula...
+    fluxo = dec(codificado, cfg.V)                     # ...depois decodifica
     tam = edc_tam(8 * cfg.bytes_por_quadro)            # tamanho esperado de payload+EDC
 
     quadros = []
     for conteudo in enq_rx(fluxo):
-        dados = conteudo[:tam]                         # tira o padding de byte da contagem
+        dados = conteudo[:tam]                         # tira o padding de byte (contagem/bytes)
         if len(dados) < tam:
             quadros.append({"dados": dados, "payload": None, "status": "truncado"})
             continue
@@ -234,8 +256,8 @@ def receber(sinal, n_pad, cfg):
 
     # só entram na mensagem os quadros aceitos pelo EDC; os com erro são descartados
     bits = "".join(q["payload"] for q in quadros if q["status"] in ("ok", "corrigido"))
-    return {"fluxo": fluxo, "quadros": quadros, "bits": bits,
-            "texto": bits_para_texto(bits)}
+    return {"codificado": np.asarray(codificado, dtype=float), "fluxo": fluxo,
+            "quadros": quadros, "bits": bits, "texto": bits_para_texto(bits)}
 
 
 def estatisticas(tx, rx):
@@ -264,7 +286,7 @@ def bits_errados(a, b):
 
 
 if __name__ == "__main__":
-    cfg = Config(fisica="8-PSK", sigma=0.3)
+    cfg = Config(codificacao="Manchester", modulacao="8-PSK", sigma=0.3)
     tx = transmitir("Olá, rede!", cfg)
     rx = receber(canal(tx["sinal"], cfg, semente=1), tx["n_pad"], cfg)
     print("quadros:", [q["status"] for q in rx["quadros"]])

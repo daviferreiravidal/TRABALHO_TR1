@@ -13,6 +13,25 @@ hermes/               interface gráfica GTK 4
   estilo.py           tema retrô (CSS)
 ```
 
+### Cadeia de transmissão
+
+```
+texto -> bits -> EDC -> ENQUADRAMENTO -> 1º CODIFICAÇÃO -> 2º MODULAÇÃO -> canal AWGN
+                (Nenhum, Paridade,     (Contagem,        (NRZ polar,       (Nenhuma, ASK,
+                 Checksum, CRC-32,      Inserção de       Manchester,       FSK, 8-PSK,
+                 Hamming)               bytes / de bits)  Bipolar)          32-QAM)
+```
+
+Toda modulação funciona com toda codificação: o modulador recebe o sinal **já codificado**
+(um nível -V, 0 ou +V por *chip*; Manchester tem 2 chips por bit) e:
+
+| Modulação | Como usa o sinal codificado |
+|---|---|
+| Nenhuma | cada chip vira 100 amostras do mesmo nível (banda base no canal) |
+| ASK | nível -> amplitude: -V→0, 0→V/2, +V→V (bipolar vira ASK de 3 níveis) |
+| FSK | nível -> frequência: 2 níveis usam 4 e 8 ciclos/chip; bipolar usa 4, 6 e 8 |
+| 8-PSK / 32-QAM | cada chip vira o número do seu nível em binário (1 bit; 2 no bipolar), agrupado de 3 ou 5 bits por símbolo |
+
 Convenção do projeto: **bits são sempre strings** (`"0110"`), na entrada e na saída de todos os módulos.
 
 ### Rodar (sempre a partir da raiz do repositório)
@@ -25,8 +44,9 @@ python -m hermes              # interface gráfica
 Atalhos: **F5** transmite, **Shift+F5** retransmite com o mesmo ruído, **Ctrl+L** limpa,
 **Ctrl+1 / Ctrl+2** mostram Transmissor / Receptor, **F1** sobre, **Ctrl+Q** sai.
 
-O ruído σ é por **amostra**: esquemas com muitas amostras por bit (Manchester, ASK, FSK,
-8-PSK, 32-QAM) integram o ruído e aguentam σ bem maior que NRZ e bipolar (1 amostra por bit).
+O ruído σ é por **amostra** e o receptor integra cada chip/símbolo, por isso σ próximo de 1
+ainda costuma passar sem erros. O `teste_simulador.py` imprime uma tabela com o maior σ
+sem erros para cada par codificação x modulação.
 
 ### Instalar GTK 4 no Windows (MSYS2)
 

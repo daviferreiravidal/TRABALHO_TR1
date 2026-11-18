@@ -1,33 +1,47 @@
 import math as mt
-#sinal é a nossa mensagem que vamos transmitir
-#f a frenquecia do sinal
-#V a amplitude em volts da nossa portadora
 
-def modulacaoASK(sinal, f, V, amostrasPorBit = 100):
+from .niveis import indice
+
+# ASK: a AMPLITUDE da portadora carrega o nível do sinal codificado.
+#
+# Recebe o sinal JÁ codificado em banda base (um valor por chip: -V, 0 ou +V)
+# e transforma cada nível numa amplitude NÃO negativa:
+#       A = V * (nivel/V + 1) / 2
+#   2 níveis (NRZ, Manchester): -V -> 0,  +V -> V            (liga/desliga, OOK)
+#   3 níveis (Bipolar):         -V -> 0,   0 -> V/2, +V -> V  (ASK de 3 níveis)
+#
+# sinal_codificado: lista de níveis (saída do codificador)
+# V: amplitude máxima da portadora
+# f: ciclos da portadora por chip
+# amostrasPorChip: amostras geradas para cada chip
+
+
+def modulaASK(sinal_codificado, V, niveis, f=4, amostrasPorChip=100):
+    """Devolve (portadora, n_pad). No ASK não há padding: n_pad = 0."""
     portadora = []
 
-    for bit in sinal:
-        bit = int(bit)                                                  # aceita '0'/'1' ou 0/1
-        for j in range(amostrasPorBit):                                 # amostras por bit
-            portadora.append (V * bit * mt.sin(2 * mt.pi * f * j/amostrasPorBit))
+    for nivel in sinal_codificado:
+        A = V * (nivel / V + 1) / 2                                  # amplitude deste chip
+        for j in range(amostrasPorChip):
+            portadora.append(A * mt.sin(2 * mt.pi * f * j / amostrasPorChip))
 
-    return portadora
+    return portadora, 0
 
-def demodulacaoASK(portadora, V, f, amostrasPorBit = 100,):
-    bits = []
-    nBits = len(portadora) // amostrasPorBit # vai dividir o tamanho da portadora e arrendondar para baixo
 
-    for i in range(nBits):
-        bloco = portadora[i * amostrasPorBit: (i + 1) * amostrasPorBit]  # pega o bloco de amostras do bit
+def demodulaASK(portadora, V, niveis, n_pad=0, f=4, amostrasPorChip=100):
+    """Devolve o sinal codificado recuperado (um nível por chip), pronto
+    para ir ao decodificador de banda base."""
+    sinal = []
+    nChips = len(portadora) // amostrasPorChip                       # arredonda para baixo
 
-        soma = sum(x * mt.sin(2 * mt.pi * f * j / amostrasPorBit) # faz a correlação entre a amostra e um sinal da mesma fase e frequência para 
-                   for j, x in enumerate(bloco))                  # para conseguirmos a amplitude
-        
-        a = 2 * soma / amostrasPorBit      # amplitude estimada (com sinal)
+    for i in range(nChips):
+        bloco = portadora[i * amostrasPorChip: (i + 1) * amostrasPorChip]
 
-        if abs(a) > (V / 2):
-            bits.append('1')
-        else:
-            bits.append('0')
+        # correlação com uma portadora de mesma fase e frequência -> amplitude
+        soma = sum(x * mt.sin(2 * mt.pi * f * j / amostrasPorChip) for j, x in enumerate(bloco))
+        A = 2 * soma / amostrasPorChip
 
-    return "".join(bits)
+        nivel = (2 * A / V - 1) * V                                  # desfaz A = V*(n/V+1)/2
+        sinal.append(niveis[indice(nivel, V, niveis)] * V)           # decide o nível mais próximo
+
+    return sinal

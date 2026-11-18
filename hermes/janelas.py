@@ -73,9 +73,9 @@ class JanelaBase(Gtk.ApplicationWindow):
         self.status = BarraStatus(3)
         self.caixa.append(self.status)
 
-    def painel_sinal_e_quadros(self, titulo_osc, canal, colunas, ao_selecionar):
+    def painel_sinal_e_quadros(self, colunas, ao_selecionar):
         """Lado direito comum: osciloscópio em cima, lista + detalhes embaixo."""
-        self.osc = Osciloscopio(canal, titulo_osc)
+        self.osc = Osciloscopio()
         self.lista = ListaQuadros(colunas, ao_selecionar)
         self.detalhes = PainelDetalhes()
 
@@ -87,7 +87,7 @@ class JanelaBase(Gtk.ApplicationWindow):
         direita = Gtk.Paned(orientation=Gtk.Orientation.VERTICAL, wide_handle=True)
         direita.set_start_child(moldura("Osciloscópio", self.osc))
         direita.set_end_child(baixo)
-        direita.set_position(230)
+        direita.set_position(290)
         return direita
 
 
@@ -110,14 +110,15 @@ class JanelaTX(JanelaBase):
         self.msg.add_css_class("campo")
         self.msg.get_buffer().set_text("Olá, mundo! Este é o Hermes.")
         self.msg.get_buffer().connect("changed", self._contar_bytes)
-        caixa_msg = rolagem(self.msg, 110)
+        caixa_msg = rolagem(self.msg, 70)
         caixa_msg.set_vexpand(False)
         caixa_msg.add_css_class("afundado")
         self.contador = Gtk.Label(xalign=1)
 
         self.enq = lista_suspensa(sim.ENQUADRAMENTOS, padrao.enquadramento)
         self.edc = lista_suspensa(sim.EDCS, padrao.edc)
-        self.fis = lista_suspensa(sim.FISICAS, padrao.fisica)
+        self.cod = lista_suspensa(sim.CODIFICACOES, padrao.codificacao)
+        self.mod = lista_suspensa(sim.MODULACOES, padrao.modulacao)
         self.tam = self._spin(1, sim.MAX_BYTES_QUADRO, 1, 0, padrao.bytes_por_quadro)
         self.sigma = self._spin(0, sim.MAX_SIGMA, 0.05, 2, padrao.sigma)
         self.amp = self._spin(0.1, 10, 0.1, 1, padrao.V)
@@ -129,17 +130,14 @@ class JanelaTX(JanelaBase):
         grade.attach(caixa_msg, 0, linha, 2, 1); linha += 1
         grade.attach(self.contador, 0, linha, 2, 1); linha += 1
         for rotulo, w in (("Enquadramento:", self.enq), ("Detecção/correção:", self.edc),
-                          ("Camada física:", self.fis), ("Bytes por quadro:", self.tam)):
+                          ("Bytes por quadro:", self.tam)):
             grade.attach(self._rotulo(rotulo), 0, linha, 1, 1)
             grade.attach(w, 1, linha, 1, 1)
             linha += 1
 
-        canal = Gtk.Grid(column_spacing=8, row_spacing=6)
-        for i, (rotulo, w) in enumerate((("Ruído AWGN (σ):", self.sigma),
-                                         ("Amplitude V:", self.amp),
-                                         ("Semente:", self.semente))):
-            canal.attach(self._rotulo(rotulo), 0, i, 1, 1)
-            canal.attach(w, 1, i, 1, 1)
+        fisica = self._grade((("1º Codificação:", self.cod), ("2º Modulação:", self.mod),
+                              ("Amplitude V:", self.amp)))
+        canal = self._grade((("Ruído AWGN (σ):", self.sigma), ("Semente:", self.semente)))
 
         self.botao = Gtk.Button(label="Transmitir  [F5]")
         self.botao.connect("clicked", lambda *_: app.activate_action("transmitir"))
@@ -149,7 +147,8 @@ class JanelaTX(JanelaBase):
         botoes.append(self.spinner)
 
         esquerda = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        esquerda.append(moldura("Configuração do enlace", grade))
+        esquerda.append(moldura("Camada de enlace", grade))
+        esquerda.append(moldura("Camada física", fisica))
         esquerda.append(moldura("Canal", canal))
         esquerda.append(botoes)
         esquerda.set_size_request(330, -1)
@@ -158,8 +157,7 @@ class JanelaTX(JanelaBase):
                               vexpand=True)
         principal.set_start_child(esquerda)
         principal.set_resize_start_child(False)
-        principal.set_end_child(self.painel_sinal_e_quadros(
-            "SINAL TRANSMITIDO", "CH1", self.COLUNAS, self._selecionou))
+        principal.set_end_child(self.painel_sinal_e_quadros(self.COLUNAS, self._selecionou))
         self.conteudo.append(principal)
 
         self._contar_bytes()
@@ -173,6 +171,13 @@ class JanelaTX(JanelaBase):
     @staticmethod
     def _rotulo(texto):
         return Gtk.Label(label=texto, xalign=0)
+
+    def _grade(self, campos):
+        grade = Gtk.Grid(column_spacing=8, row_spacing=6)
+        for i, (rotulo, w) in enumerate(campos):
+            grade.attach(self._rotulo(rotulo), 0, i, 1, 1)
+            grade.attach(w, 1, i, 1, 1)
+        return grade
 
     @staticmethod
     def _spin(minimo, maximo, passo, digitos, valor):
@@ -200,7 +205,7 @@ class JanelaTX(JanelaBase):
             s.update()                               # aceita valor digitado sem Enter
         semente = self.semente.get_value_as_int()
         return sim.Config(enquadramento=escolhido(self.enq), edc=escolhido(self.edc),
-                          fisica=escolhido(self.fis),
+                          codificacao=escolhido(self.cod), modulacao=escolhido(self.mod),
                           bytes_por_quadro=self.tam.get_value_as_int(),
                           sigma=round(self.sigma.get_value(), 4), V=self.amp.get_value(),
                           semente=semente or None)
@@ -216,8 +221,10 @@ class JanelaTX(JanelaBase):
     # ---- resultados ----
     def mostrar(self, tx, cfg):
         self.ultimo = (tx, cfg)
-        self.osc.titulo = f"SINAL TRANSMITIDO - {cfg.fisica}"
-        self.osc.set_sinal(tx["sinal"])
+        canal2 = ("NO CANAL (sem portadora)" if cfg.modulacao.startswith("Nenhuma")
+                  else f"PORTADORA {cfg.modulacao}")
+        self.osc.set_canais([(f"CODIFICADO {cfg.codificacao}", tx["codificado"], "amarelo"),
+                             (canal2, tx["sinal"], "verde")])
         linhas = []
         for i, q in enumerate(tx["quadros"]):
             asc = sim.bits_para_texto(q["payload"]).replace("\n", " ")
@@ -226,7 +233,8 @@ class JanelaTX(JanelaBase):
         self.lista.preencher(linhas)
         self.status[0] = "Transmissão concluída"
         self.status[1] = f"Quadros: {len(tx['quadros'])}"
-        self.status[2] = f"Bits no canal: {len(tx['fluxo'])}  |  Amostras: {len(tx['sinal'])}"
+        self.status[2] = (f"Bits: {len(tx['fluxo'])}  |  Chips: {len(tx['codificado'])}  |  "
+                          f"Amostras: {len(tx['sinal'])}")
 
     def _selecionou(self, i):
         if self.ultimo:
@@ -286,8 +294,7 @@ class JanelaRX(JanelaBase):
                               vexpand=True)
         principal.set_start_child(esquerda)
         principal.set_resize_start_child(False)
-        principal.set_end_child(self.painel_sinal_e_quadros(
-            "SINAL RECEBIDO", "CH2", self.COLUNAS, self._selecionou))
+        principal.set_end_child(self.painel_sinal_e_quadros(self.COLUNAS, self._selecionou))
         self.conteudo.append(principal)
 
         self.console.log("Receptor em escuta.", "info")
@@ -297,8 +304,8 @@ class JanelaRX(JanelaBase):
 
     def mostrar(self, tx, rx, sinal, cfg, est):
         self.ultimo = (tx, rx, cfg)
-        self.osc.titulo = f"SINAL RECEBIDO - {cfg.fisica}  σ={cfg.sigma:g}"
-        self.osc.set_sinal(sinal)
+        self.osc.set_canais([(f"RECEBIDO {cfg.modulacao}  σ={cfg.sigma:g}", sinal, "verde"),
+                             (f"DEMODULADO {cfg.codificacao}", rx["codificado"], "amarelo")])
 
         linhas = []
         for i, q in enumerate(rx["quadros"]):
