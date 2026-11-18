@@ -20,4 +20,4 @@ def decodificadorNRZPolar(Sinal, V):
         else:
             mensagem.append('0')
 
-    return mensagem
+    return "".join(mensagem)

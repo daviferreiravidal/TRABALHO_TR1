@@ -27,36 +27,32 @@ def crc_receptor(bits):
         if top:
             rest ^= POLY
 
-    print(rest)
+    return rest == 0
 
-    if rest == 0:
-        return True
+
+#testes
+if __name__ == "__main__":
+    bits = "10110"
+    result = crc_transmissor(bits)
+    print(hex(result))                 # 0x569796c2
+    print(format(result, '032b'))      # 01010110100101111001011011000010
+
+    #caso bom
+    print(bits + " + " + format(result, '032b'))
+    bits = bits + format(result, '032b')
+
+    print(bits)
+
+    if crc_receptor(bits):
+        print("bits sem erro")
     else:
-        return False
+        print("bits com erro")
 
+    #caso ruim
 
-bits = "10110"
-result = crc_transmissor(bits)
-print(hex(result))                 # 0x569796c2
-print(format(result, '032b'))      # 01010110100101111001011011000010
+    bits_corrompidos = "00110" + format(result, '032b')
 
-#caso bom
-print(bits + " + " + format(result, '032b'))
-bits = bits + format(result, '032b')
-
-print(bits)
-
-if crc_receptor(bits):
-    print("bits sem erro")
-else:
-    print("bits com erro")
-
-#caso ruim
-
-bits_corrompidos = "00110" + format(result, '032b')
-
-if crc_receptor(bits_corrompidos):
-    print("bits sem erro")
-else:
-    print("bits com erro")
-
+    if crc_receptor(bits_corrompidos):
+        print("bits sem erro")
+    else:
+        print("bits com erro")

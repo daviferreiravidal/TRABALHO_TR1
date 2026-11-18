@@ -21,4 +21,4 @@ def decodificadorBipolar(Sinal, V):
             mensagem.append('1')
         else:
             mensagem.append('0')
-    return mensagem
+    return "".join(mensagem)

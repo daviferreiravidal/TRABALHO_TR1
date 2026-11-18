@@ -36,4 +36,4 @@ def decodificadorManchester(sinal, V, amostrasPorBit = 100):
         else:
             mensagem.append('0')
             
-    return mensagem
+    return "".join(mensagem)

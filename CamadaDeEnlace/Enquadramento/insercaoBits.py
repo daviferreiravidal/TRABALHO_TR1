@@ -55,15 +55,16 @@ def deframe_message(stream):
     return "".join(extract_frames(stream))
 
 # ---------------- Teste ----------------
-msg = "0000010011111100100100010111010" + "1111111111" + "01111110"
-tx = frame_message(msg, max_payload=16)
-rx = deframe_message(tx)
+if __name__ == "__main__":
+    msg = "0000010011111100100100010111010" + "1111111111" + "01111110"
+    tx = frame_message(msg, max_payload=16)
+    rx = deframe_message(tx)
 
-print("Fluxo transmitido:", tx)
-print("Mensagem original:", msg)
-print("Mensagem recebida:", rx)
-print("OK?:", rx == msg)
+    print("Fluxo transmitido:", tx)
+    print("Mensagem original:", msg)
+    print("Mensagem recebida:", rx)
+    print("OK?:", rx == msg)
 
-# Verificação do stuffing
-print(bit_stuff("0111111011111"))   # -> 01111101011111 0? veja a saída
-assert "111111" not in bit_stuff("1" * 40)
+    # Verificação do stuffing
+    print(bit_stuff("0111111011111"))   # -> 01111101011111 0? veja a saída
+    assert "111111" not in bit_stuff("1" * 40)

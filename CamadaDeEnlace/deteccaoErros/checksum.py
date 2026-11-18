@@ -4,9 +4,11 @@ def checksum_transmissor(tamanho_do_segmento, input):
     #converte o input para uma string
     mensagem = ''.join(str(x) for x in input)
 
-    #Calcula quantos segmentos serão usados
-    n_segmentos = len(input)//tamanho_do_segmento
-    
+    #Se o último segmento ficar incompleto, o receptor (que soma a mensagem
+    #já com o checksum no fim) desalinha os segmentos e acusa erro sempre
+    if len(mensagem) % tamanho_do_segmento != 0:
+        raise ValueError("checksum: o tamanho da mensagem precisa ser múltiplo do tamanho do segmento")
+
     soma = 0
     
     #Cria uma string de 1s com o tamanho do segmento -1
@@ -44,8 +46,5 @@ def checksum_receptor(tamanho_do_segmento, input):
     # Descarta os bits de overflow
     soma &= mascara
 
-    # Verifica se todos os bits são 1
-    if soma == mascara:
-        return "QUADRO SEM ERROS"
-    else:
-        return "QUADRO COM ERROS"
+    # Verifica se todos os bits são 1  (True = quadro sem erros)
+    return soma == mascara

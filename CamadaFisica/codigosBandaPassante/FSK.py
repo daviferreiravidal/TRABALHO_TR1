@@ -14,7 +14,7 @@ def modulacaoFSK(A, f1, f2, mensagem, amostras_por_bit):
     frequencia = 0
     
     for bit in mensagem:
-        if bit == 1:
+        if int(bit) == 1:                         # aceita '0'/'1' ou 0/1
             frequencia = f1
         else:
             frequencia = f2
@@ -52,10 +52,10 @@ def demodulacaoFSK(portadora, A, f1, f2, amostras_por_bit):
         caso2 = I2**2 + Q2**2
         
         if abs(caso1) > abs(caso2):
-            bits_stream.append(1)
+            bits_stream.append('1')
         else:
-            bits_stream.append(0)
+            bits_stream.append('0')
 
-    return bits_stream   
+    return "".join(bits_stream)   
 
     

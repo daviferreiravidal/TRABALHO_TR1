@@ -6,6 +6,12 @@ def cc_transmissor(tamanho_maximo, input):
     # Converte a entrada para uma string de bits
     mensagem = ''.join(str(x) for x in input)
 
+    # A contagem é feita em bytes: bits que não fecham um byte se perderiam
+    if len(mensagem) % 8 != 0:
+        raise ValueError("cc_transmissor: a mensagem precisa ter um número de bits múltiplo de 8")
+    if not 1 <= tamanho_maximo <= 255:
+        raise ValueError("cc_transmissor: o cabeçalho de 8 bits só conta de 1 a 255 bytes")
+
     mensagem_enquadrada = ''
 
     # Percorre a mensagem em blocos de bytes
@@ -24,6 +30,10 @@ def cc_transmissor(tamanho_maximo, input):
     return mensagem_enquadrada
 
 def cc_receptor(input):
+    """Devolve SEMPRE uma lista com os quadros completos encontrados.
+    Se o fluxo terminar no meio de um cabeçalho ou de um quadro
+    (por exemplo, porque um erro corrompeu um cabeçalho), para ali e
+    devolve o que já tinha conseguido ler."""
 
     # Converte a entrada para uma string de bits
     mensagem = ''.join(str(x) for x in input)
@@ -35,7 +45,7 @@ def cc_receptor(input):
 
         # Verifica se existe um cabeçalho completo
         if posicao + 8 > len(mensagem):
-            return ("CABEÇALHO INCOMPLETO")
+            break
 
         # Lê o header
         cabecalho = mensagem[posicao:posicao + 8]
@@ -48,7 +58,7 @@ def cc_receptor(input):
 
         # Verifica se o quadro está completo
         if posicao + tamanho_bits > len(mensagem):
-            return ("QUADRO INCOMPLETO")
+            break
 
         # Extrai o conteúdo do quadro
         quadro = mensagem[posicao:posicao + tamanho_bits]
@@ -58,9 +68,3 @@ def cc_receptor(input):
         posicao += tamanho_bits
 
     return quadros
-
-
-    
-    
-    
-    
