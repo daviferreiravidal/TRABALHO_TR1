@@ -39,6 +39,33 @@ class Config:
     bytes_por_quadro: int = 4     # tamanho da carga útil de cada quadro
     sigma: float = 0.0            # desvio padrão do ruído AWGN
     V: float = 1.0                # amplitude do sinal
+    semente: int | None = None    # semente do ruído (None = aleatório)
+
+
+# Limites aceitos (a GUI usa os mesmos valores)
+MAX_BYTES_MENSAGEM = 2048
+MAX_BYTES_QUADRO = 32
+MAX_SIGMA = 10.0
+
+
+def validar(texto, cfg):
+    """Levanta ValueError com uma mensagem legível se algo estiver fora do lugar."""
+    if not texto:
+        raise ValueError("a mensagem está vazia")
+    n = len(texto.encode("utf-8"))
+    if n > MAX_BYTES_MENSAGEM:
+        raise ValueError(f"mensagem com {n} bytes (máximo {MAX_BYTES_MENSAGEM})")
+    for nome, tabela, valor in (("enquadramento", ENQUADRAMENTOS, cfg.enquadramento),
+                                ("EDC", EDCS, cfg.edc),
+                                ("camada física", FISICAS, cfg.fisica)):
+        if valor not in tabela:
+            raise ValueError(f"{nome} desconhecido: {valor!r}")
+    if not 1 <= cfg.bytes_por_quadro <= MAX_BYTES_QUADRO:
+        raise ValueError(f"bytes por quadro deve estar entre 1 e {MAX_BYTES_QUADRO}")
+    if not 0 <= cfg.sigma <= MAX_SIGMA:
+        raise ValueError(f"σ deve estar entre 0 e {MAX_SIGMA}")
+    if cfg.V <= 0:
+        raise ValueError("a amplitude V deve ser positiva")
 
 
 # Parâmetros fixos da camada física (simples de propósito)
@@ -152,8 +179,7 @@ def bits_para_texto(bits):
 # --------------------------------------------------------------------------
 def transmitir(texto, cfg):
     """Devolve um dict com tudo que o transmissor produziu (para mostrar na GUI)."""
-    if not texto:
-        raise ValueError("digite uma mensagem")
+    validar(texto, cfg)
     edc_tx, _, _ = EDCS[cfg.edc]
     enq_tx, _ = ENQUADRAMENTOS[cfg.enquadramento]
     fis_tx, _ = FISICAS[cfg.fisica]
@@ -178,6 +204,8 @@ def canal(sinal, cfg, semente=None):
     """Meio de transmissão: soma ruído gaussiano branco (AWGN) ao sinal."""
     if cfg.sigma <= 0:
         return np.array(sinal, dtype=float)
+    if semente is None:
+        semente = cfg.semente
     return AWGN.canalAwgn(sinal, 0.0, cfg.sigma, semente)
 
 
@@ -196,13 +224,38 @@ def receber(sinal, n_pad, cfg):
         if len(dados) < tam:
             quadros.append({"dados": dados, "payload": None, "status": "truncado"})
             continue
-        payload, ok, pos = edc_rx(dados)
+        try:
+            payload, ok, pos = edc_rx(dados)
+        except (ValueError, IndexError):           # quadro estragado demais para o EDC
+            quadros.append({"dados": dados, "payload": None, "status": "erro"})
+            continue
         status = "ok" if ok else ("corrigido" if pos else "erro")
         quadros.append({"dados": dados, "payload": payload, "status": status})
 
-    bits = "".join(q["payload"] for q in quadros if q["payload"] is not None)
+    # só entram na mensagem os quadros aceitos pelo EDC; os com erro são descartados
+    bits = "".join(q["payload"] for q in quadros if q["status"] in ("ok", "corrigido"))
     return {"fluxo": fluxo, "quadros": quadros, "bits": bits,
             "texto": bits_para_texto(bits)}
+
+
+def estatisticas(tx, rx):
+    """Números para o painel de estatísticas do receptor."""
+    st = [q["status"] for q in rx["quadros"]]
+    erros_canal = bits_errados(tx["fluxo"], rx["fluxo"])
+    return {
+        "bits_canal": len(tx["fluxo"]),
+        "bits_errados": erros_canal,
+        "ber": erros_canal / max(len(tx["fluxo"]), 1),
+        "enviados": len(tx["quadros"]),
+        "recebidos": len(st),
+        "ok": st.count("ok"),
+        "corrigidos": st.count("corrigido"),
+        "erros": st.count("erro"),
+        "truncados": st.count("truncado"),
+        "perdidos": max(len(tx["quadros"]) - len(st), 0),
+        "eficiencia": len(tx["bits"]) / max(len(tx["fluxo"]), 1),   # carga útil / bits no canal
+        "mensagem_ok": rx["bits"][:len(tx["bits"])] == tx["bits"],
+    }
 
 
 def bits_errados(a, b):
