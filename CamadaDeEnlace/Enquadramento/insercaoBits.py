@@ -1,8 +1,7 @@
 FLAG = "01111110"
 
-# ---------------- Transmissor ----------------
+#Transmissor
 def bit_stuff(payload):
-    """Insere um '0' após cada 5 uns consecutivos."""
     out, ones = [], 0
     for b in payload:
         out.append(b)

@@ -2,10 +2,7 @@
 import math as mt
 
 def entrelacarBits(bits, num_colunas=4):
-    """
-    Realiza o entrelaçamento matricial (escreve por linha, lê por coluna).
-    Retorna (bits_entrelacados, n_pad).
-    """
+
     # Calcula o padding necessário para fechar a matriz completa (múltiplo de num_colunas)
     n_pad = -len(bits) % num_colunas
     bits_padded = bits + "0" * n_pad
@@ -28,9 +25,7 @@ def entrelacarBits(bits, num_colunas=4):
 
 
 def desentrelacarBits(bits_entrelacados, num_colunas=4, n_pad=0):
-    """
-    Desfaz o entrelaçamento matricial (escreve por coluna, lê por linha) e remove o padding.
-    """
+
     if len(bits_entrelacados) % num_colunas != 0:
         raise ValueError("O tamanho dos bits recebidos não é múltiplo do número de colunas.")
         
@@ -53,38 +48,19 @@ def desentrelacarBits(bits_entrelacados, num_colunas=4, n_pad=0):
         
     return bits_recuperados
 
-
-# ---------------------------------------------------------------------------
-# Enquadramento por entrelaçamento (quadros de tamanho fixo)
-#
-# O entrelaçamento não tem FLAG nem cabeçalho, então os quadros têm TAMANHO
-# FIXO, combinado entre transmissor e receptor: cada quadro é a matriz
-# (payload + EDC) de NUM_COLUNAS colunas, lida coluna por coluna. O receptor
-# corta o fluxo em blocos desse tamanho e desfaz a matriz de cada um.
-#
-# Vantagem: uma rajada de erros vizinhos no canal cai em linhas diferentes da
-# matriz, ou seja, fica espalhada pelo quadro depois do desentrelaçamento.
-# Limitação: se o receptor perder ou ganhar um bit, todos os quadros
-# seguintes ficam desalinhados (não há como se ressincronizar).
-# ---------------------------------------------------------------------------
 NUM_COLUNAS = 8
 
 
 def tamanho_quadro(tam_dados, num_colunas=NUM_COLUNAS):
-    """Tamanho do quadro no canal para 'tam_dados' bits de payload+EDC."""
     return tam_dados + (-tam_dados % num_colunas)
 
 
 def build_frame(dados, num_colunas=NUM_COLUNAS):
-    """dados -> quadro entrelaçado (com zeros completando a última linha)."""
     quadro, _n_pad = entrelacarBits(dados, num_colunas)
     return quadro
 
 
 def extract_frames(fluxo, tam_dados, num_colunas=NUM_COLUNAS):
-    """Corta o fluxo em quadros de tamanho fixo e desentrelaça cada um.
-    Devolve (payload + EDC) de cada quadro; uma sobra menor que um quadro
-    no fim do fluxo é ignorada."""
     tam = tamanho_quadro(tam_dados, num_colunas)
     n_pad = tam - tam_dados
     return [desentrelacarBits(fluxo[i:i + tam], num_colunas, n_pad)

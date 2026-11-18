@@ -1,10 +1,7 @@
 # paridade.py
 
 def adicionarBitParidade(bits, tipo='par'):
-    """
-    Adiciona um bit de paridade ao final da sequência de bits.
-    tipo: 'par' (even) ou 'impar' (odd)
-    """
+
     qtd_uns = bits.count('1')
     
     if tipo == 'par':
@@ -20,9 +17,7 @@ def adicionarBitParidade(bits, tipo='par'):
 
 
 def verificarBitParidade(quadro, tipo='par'):
-    """
-    Verifica se houve erro no quadro recebido e retorna (valido, dados_originais).
-    """
+
     if len(quadro) < 2:
         raise ValueError("O quadro deve conter dados e o bit de paridade.")
         

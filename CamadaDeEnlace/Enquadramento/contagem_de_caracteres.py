@@ -30,10 +30,6 @@ def cc_transmissor(tamanho_maximo, input):
     return mensagem_enquadrada
 
 def cc_receptor(input):
-    """Devolve SEMPRE uma lista com os quadros completos encontrados.
-    Se o fluxo terminar no meio de um cabeçalho ou de um quadro
-    (por exemplo, porque um erro corrompeu um cabeçalho), para ali e
-    devolve o que já tinha conseguido ler."""
 
     # Converte a entrada para uma string de bits
     mensagem = ''.join(str(x) for x in input)
