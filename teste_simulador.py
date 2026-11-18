@@ -7,7 +7,7 @@ Rode a partir da raiz do repositório:   python teste_simulador.py
 import itertools
 import time
 
-from simulador import (Config, ENQUADRAMENTOS, EDCS, CODIFICACOES, MODULACOES,
+from Simulador import (Config, ENQUADRAMENTOS, EDCS, CODIFICACOES, MODULACOES,
                        transmitir, canal, receber)
 
 TEXTO = "Olá, camada física! ~}{ Teste do Hermes."   # '~' = 0x7E e '}' = 0x7D (FLAG e ESC)

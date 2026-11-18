@@ -3,15 +3,19 @@
 ## HERMES — simulador de redes
 
 ```
-simulador.py          lógica (enlace + física + canal AWGN), sem interface
-teste_simulador.py    testa todas as combinações (só precisa de numpy)
-hermes/               interface gráfica GTK 4
-  __main__.py         ponto de entrada (python -m hermes)
-  app.py              aplicação: menus, atalhos, thread da simulação
-  janelas.py          janelas Transmissor e Receptor
-  widgets.py          osciloscópio, lista de quadros, detalhes, console
-  estilo.py           tema retrô (CSS)
+CamadaFisica.py      implementações da camada física: codificação (NRZ polar, Manchester,
+                     Bipolar), modulação (ASK, FSK, 8-PSK, 32-QAM) e canal AWGN
+CamadaEnlace.py      implementações da camada de enlace: enquadramento (contagem, inserção
+                     de bytes, inserção de bits, entrelaçamento), detecção de erros
+                     (paridade, checksum, CRC-32) e correção (Hamming)
+InterfaceGUI.py      interface gráfica GTK (HERMES): entrada de dados e resultados gráficos
+Simulador.py         rotina principal: chama as camadas para simular a transmissão e abre a GUI
+teste_simulador.py   testa todas as combinações (só precisa de numpy)
 ```
+
+Cada arquivo de camada reúne, em seções, o código que antes ficava em um arquivo por técnica
+(o cabeçalho de cada seção indica o arquivo de origem). As funções não foram alteradas; os
+poucos nomes que se repetiam entre módulos ganharam um sufixo, listado no topo de cada arquivo.
 
 ### Cadeia de transmissão
 
@@ -42,8 +46,9 @@ Convenção do projeto: **bits são sempre strings** (`"0110"`), na entrada e na
 ### Rodar (sempre a partir da raiz do repositório)
 
 ```
-python teste_simulador.py     # testes
-python -m hermes              # interface gráfica
+python teste_simulador.py     # testes de todas as combinações
+python CamadaEnlace.py        # testes originais de cada método de enlace
+python Simulador.py           # interface gráfica
 ```
 
 Atalhos: **F5** transmite, **Shift+F5** retransmite com o mesmo ruído, **Ctrl+L** limpa,
@@ -58,6 +63,6 @@ sem erros para cada par codificação x modulação.
 1. Instale o MSYS2 (https://www.msys2.org) e abra o terminal **MSYS2 UCRT64**.
 2. `pacman -Suy`
 3. `pacman -S mingw-w64-ucrt-x86_64-gtk4 mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-python-gobject mingw-w64-ucrt-x86_64-python-cairo mingw-w64-ucrt-x86_64-python-numpy`
-4. Nesse mesmo terminal: `cd /c/Users/<você>/Documents/codigos/TRABALHO_TR1` e `python -m hermes`
+4. Nesse mesmo terminal: `cd /c/Users/<você>/Documents/codigos/TRABALHO_TR1` e `python Simulador.py`
 
 No Linux (Ubuntu/Debian): `sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0 python3-numpy`.

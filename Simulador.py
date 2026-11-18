@@ -1,7 +1,10 @@
 """
 Simulador de redes simples: camada de enlace + camada física + canal AWGN.
 
-Só a lógica (sem interface gráfica). A GUI está no pacote hermes/.
+Rotina principal: chama as funções de CamadaEnlace.py e CamadaFisica.py
+para simular a transmissão, e abre a interface gráfica (InterfaceGUI.py).
+
+    python Simulador.py          abre a interface gráfica
 
 Transmissor:
     texto -> bits -> fatias de N bits (completa com 0s)
@@ -18,17 +21,13 @@ Receptor (caminho inverso):
 Convenção usada em todo o projeto: bits são SEMPRE strings, ex.: "0110".
 """
 
+import sys
 from dataclasses import dataclass
 
 import numpy as np
 
-from CamadaDeEnlace.Enquadramento import (contagem_de_caracteres, insercaoBits, insercaoBytes,
-                                          entrelacamento)
-from CamadaDeEnlace.deteccaoErros import paridade, checksum, crc
-from CamadaDeEnlace.correcaoErros import hamming
-from CamadaFisica import AWGN
-from CamadaFisica.codigosBandabase import nrz_polar, bipolar, manchester
-from CamadaFisica.codigosBandaPassante import ASK, FSK, PSK_8, QAM_32
+import CamadaEnlace
+import CamadaFisica
 
 
 # --------------------------------------------------------------------------
@@ -90,7 +89,7 @@ SEGMENTO_CHECKSUM = 8      # bits
 # EDC: tx(payload) -> dados ;  rx(dados) -> (payload, ok, posicao_corrigida)
 #      tam(n) -> tamanho de "dados" para um payload de n bits
 def _hamming_rx(dados):
-    payload, pos = hamming.hammingDecodifica(dados)
+    payload, pos = CamadaEnlace.hammingDecodifica(dados)
     return payload, pos == 0, pos
 
 EDCS = {
@@ -99,21 +98,21 @@ EDCS = {
         lambda d: (d, True, 0),
         lambda n: n),
     "Paridade par": (
-        lambda b: paridade.adicionarBitParidade(b, "par"),
-        lambda d: (lambda ok, dados: (dados, ok, 0))(*paridade.verificarBitParidade(d, "par")),
+        lambda b: CamadaEnlace.adicionarBitParidade(b, "par"),
+        lambda d: (lambda ok, dados: (dados, ok, 0))(*CamadaEnlace.verificarBitParidade(d, "par")),
         lambda n: n + 1),
     "Checksum": (
-        lambda b: checksum.checksum_transmissor(SEGMENTO_CHECKSUM, b),
-        lambda d: (d[:-SEGMENTO_CHECKSUM], checksum.checksum_receptor(SEGMENTO_CHECKSUM, d), 0),
+        lambda b: CamadaEnlace.checksum_transmissor(SEGMENTO_CHECKSUM, b),
+        lambda d: (d[:-SEGMENTO_CHECKSUM], CamadaEnlace.checksum_receptor(SEGMENTO_CHECKSUM, d), 0),
         lambda n: n + SEGMENTO_CHECKSUM),
     "CRC-32": (
-        lambda b: b + format(crc.crc_transmissor(b), "032b"),
-        lambda d: (d[:-crc.R], crc.crc_receptor(d), 0),
-        lambda n: n + crc.R),
+        lambda b: b + format(CamadaEnlace.crc_transmissor(b), "032b"),
+        lambda d: (d[:-CamadaEnlace.R], CamadaEnlace.crc_receptor(d), 0),
+        lambda n: n + CamadaEnlace.R),
     "Hamming": (
-        hamming.hammingCode,
+        CamadaEnlace.hammingCode,
         _hamming_rx,
-        hamming.tamCodeWord),
+        CamadaEnlace.tamCodeWord),
 }
 
 # Enquadramento: tx(dados) -> quadro
@@ -125,16 +124,16 @@ def _completa_byte(dados):
 
 def _contagem_tx(dados):
     dados = _completa_byte(dados)
-    return contagem_de_caracteres.cc_transmissor(len(dados) // 8, dados)
+    return CamadaEnlace.cc_transmissor(len(dados) // 8, dados)
 
 ENQUADRAMENTOS = {
     "Contagem de caracteres": (_contagem_tx,
-                               lambda f, tam: contagem_de_caracteres.cc_receptor(f)),
-    "Inserção de bytes": (lambda d: insercaoBytes.build_frame(_completa_byte(d)),
-                          lambda f, tam: insercaoBytes.extract_frames(f)),
-    "Inserção de bits": (insercaoBits.build_frame,
-                         lambda f, tam: insercaoBits.extract_frames(f)),
-    "Entrelaçamento": (entrelacamento.build_frame, entrelacamento.extract_frames),
+                               lambda f, tam: CamadaEnlace.cc_receptor(f)),
+    "Inserção de bytes": (lambda d: CamadaEnlace.build_frame_bytes(_completa_byte(d)),
+                          lambda f, tam: CamadaEnlace.extract_frames_bytes(f)),
+    "Inserção de bits": (CamadaEnlace.build_frame_bits,
+                         lambda f, tam: CamadaEnlace.extract_frames_bits(f)),
+    "Entrelaçamento": (CamadaEnlace.build_frame_entrelacamento, CamadaEnlace.extract_frames_entrelacamento),
 }
 
 # Codificação de banda base:
@@ -143,17 +142,17 @@ ENQUADRAMENTOS = {
 #   niveis: níveis possíveis do código (o modulador precisa saber)
 CODIFICACOES = {
     "NRZ polar": (
-        lambda b, V: nrz_polar.codificadorNRZPolar(b, V),
-        lambda s, V: nrz_polar.decodificadorNRZPolar(s, V),
-        nrz_polar.NIVEIS),
+        lambda b, V: CamadaFisica.codificadorNRZPolar(b, V),
+        lambda s, V: CamadaFisica.decodificadorNRZPolar(s, V),
+        CamadaFisica.NIVEIS_NRZ_POLAR),
     "Manchester": (
-        lambda b, V: manchester.codificadorManchester(b, V, manchester.CHIPS_POR_BIT),
-        lambda s, V: manchester.decodificadorManchester(s, V, manchester.CHIPS_POR_BIT),
-        manchester.NIVEIS),
+        lambda b, V: CamadaFisica.codificadorManchester(b, V, CamadaFisica.CHIPS_POR_BIT_MANCHESTER),
+        lambda s, V: CamadaFisica.decodificadorManchester(s, V, CamadaFisica.CHIPS_POR_BIT_MANCHESTER),
+        CamadaFisica.NIVEIS_MANCHESTER),
     "Bipolar": (
-        lambda b, V: bipolar.codificadorBipolar(len(b), b, V),
-        lambda s, V: bipolar.decodificadorBipolar(s, V),
-        bipolar.NIVEIS),
+        lambda b, V: CamadaFisica.codificadorBipolar(len(b), b, V),
+        lambda s, V: CamadaFisica.decodificadorBipolar(s, V),
+        CamadaFisica.NIVEIS_BIPOLAR),
 }
 
 # Modulação por portadora (todas recebem o sinal JÁ codificado):
@@ -171,17 +170,17 @@ def _banda_base_rx(sinal, V, niveis, n_pad):
 MODULACOES = {
     "Nenhuma (banda base)": (_banda_base_tx, _banda_base_rx),
     "ASK": (
-        lambda s, V, nv: ASK.modulaASK(s, V, nv, F_ASK, AMOSTRAS_POR_CHIP),
-        lambda p, V, nv, n: ASK.demodulaASK(p, V, nv, n, F_ASK, AMOSTRAS_POR_CHIP)),
+        lambda s, V, nv: CamadaFisica.modulaASK(s, V, nv, F_ASK, AMOSTRAS_POR_CHIP),
+        lambda p, V, nv, n: CamadaFisica.demodulaASK(p, V, nv, n, F_ASK, AMOSTRAS_POR_CHIP)),
     "FSK": (
-        lambda s, V, nv: FSK.modulaFSK(s, V, nv, AMOSTRAS_POR_CHIP, F_MIN_FSK, F_MAX_FSK),
-        lambda p, V, nv, n: FSK.demodulaFSK(p, V, nv, n, AMOSTRAS_POR_CHIP, F_MIN_FSK, F_MAX_FSK)),
+        lambda s, V, nv: CamadaFisica.modulaFSK(s, V, nv, AMOSTRAS_POR_CHIP, F_MIN_FSK, F_MAX_FSK),
+        lambda p, V, nv, n: CamadaFisica.demodulaFSK(p, V, nv, n, AMOSTRAS_POR_CHIP, F_MIN_FSK, F_MAX_FSK)),
     "8-PSK": (
-        lambda s, V, nv: PSK_8.modula8PSK(s, V, nv, FC, AMOSTRAS_POR_SIMBOLO),
-        lambda p, V, nv, n: PSK_8.demodula8PSK(p, V, nv, n, FC, AMOSTRAS_POR_SIMBOLO)),
+        lambda s, V, nv: CamadaFisica.modula8PSK(s, V, nv, FC, AMOSTRAS_POR_SIMBOLO),
+        lambda p, V, nv, n: CamadaFisica.demodula8PSK(p, V, nv, n, FC, AMOSTRAS_POR_SIMBOLO)),
     "32-QAM": (
-        lambda s, V, nv: QAM_32.modula32QAM(s, V, nv, FC, AMOSTRAS_POR_SIMBOLO),
-        lambda p, V, nv, n: QAM_32.demodula32QAM(p, V, nv, n, FC, AMOSTRAS_POR_SIMBOLO)),
+        lambda s, V, nv: CamadaFisica.modula32QAM(s, V, nv, FC, AMOSTRAS_POR_SIMBOLO),
+        lambda p, V, nv, n: CamadaFisica.demodula32QAM(p, V, nv, n, FC, AMOSTRAS_POR_SIMBOLO)),
 }
 
 
@@ -233,7 +232,7 @@ def canal(sinal, cfg, semente=None):
         return np.array(sinal, dtype=float)
     if semente is None:
         semente = cfg.semente
-    return AWGN.canalAwgn(sinal, 0.0, cfg.sigma, semente)
+    return CamadaFisica.canalAwgn(sinal, 0.0, cfg.sigma, semente)
 
 
 def receber(sinal, n_pad, cfg):
@@ -292,9 +291,15 @@ def bits_errados(a, b):
     return sum(x != y for x, y in zip(a, b)) + abs(len(a) - len(b))
 
 
+# --------------------------------------------------------------------------
+# Rotina principal
+# --------------------------------------------------------------------------
+def main():
+    """Abre a interface gráfica, entregando a ela este módulo (as tabelas de
+    técnicas e as funções transmitir/canal/receber/estatisticas)."""
+    import InterfaceGUI
+    return InterfaceGUI.executar(sys.modules[__name__])
+
+
 if __name__ == "__main__":
-    cfg = Config(codificacao="Manchester", modulacao="8-PSK", sigma=0.3)
-    tx = transmitir("Olá, rede!", cfg)
-    rx = receber(canal(tx["sinal"], cfg, semente=1), tx["n_pad"], cfg)
-    print("quadros:", [q["status"] for q in rx["quadros"]])
-    print("recebido:", rx["texto"])
+    sys.exit(main())
