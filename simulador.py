@@ -22,7 +22,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from CamadaDeEnlace.Enquadramento import contagem_de_caracteres, insercaoBits, insercaoBytes
+from CamadaDeEnlace.Enquadramento import (contagem_de_caracteres, insercaoBits, insercaoBytes,
+                                          entrelacamento)
 from CamadaDeEnlace.deteccaoErros import paridade, checksum, crc
 from CamadaDeEnlace.correcaoErros import hamming
 from CamadaFisica import AWGN
@@ -115,7 +116,10 @@ EDCS = {
         hamming.tamCodeWord),
 }
 
-# Enquadramento: tx(dados) -> quadro ;  rx(fluxo) -> lista de quadros (só o conteúdo)
+# Enquadramento: tx(dados) -> quadro
+#                rx(fluxo, tam) -> lista com o conteúdo de cada quadro encontrado
+#                (tam = bits de payload+EDC esperados; só o entrelaçamento,
+#                 que usa quadros de tamanho fixo, precisa dele)
 def _completa_byte(dados):
     return dados + "0" * (-len(dados) % 8)      # enquadramentos orientados a byte
 
@@ -124,10 +128,13 @@ def _contagem_tx(dados):
     return contagem_de_caracteres.cc_transmissor(len(dados) // 8, dados)
 
 ENQUADRAMENTOS = {
-    "Contagem de caracteres": (_contagem_tx, contagem_de_caracteres.cc_receptor),
+    "Contagem de caracteres": (_contagem_tx,
+                               lambda f, tam: contagem_de_caracteres.cc_receptor(f)),
     "Inserção de bytes": (lambda d: insercaoBytes.build_frame(_completa_byte(d)),
-                          insercaoBytes.extract_frames),
-    "Inserção de bits": (insercaoBits.build_frame, insercaoBits.extract_frames),
+                          lambda f, tam: insercaoBytes.extract_frames(f)),
+    "Inserção de bits": (insercaoBits.build_frame,
+                         lambda f, tam: insercaoBits.extract_frames(f)),
+    "Entrelaçamento": (entrelacamento.build_frame, entrelacamento.extract_frames),
 }
 
 # Codificação de banda base:
@@ -241,7 +248,7 @@ def receber(sinal, n_pad, cfg):
     tam = edc_tam(8 * cfg.bytes_por_quadro)            # tamanho esperado de payload+EDC
 
     quadros = []
-    for conteudo in enq_rx(fluxo):
+    for conteudo in enq_rx(fluxo, tam):
         dados = conteudo[:tam]                         # tira o padding de byte (contagem/bytes)
         if len(dados) < tam:
             quadros.append({"dados": dados, "payload": None, "status": "truncado"})

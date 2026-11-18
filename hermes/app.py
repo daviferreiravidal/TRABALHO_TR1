@@ -12,6 +12,7 @@ from .janelas import JanelaRX, JanelaTX
 LEGENDA = (
     "Detalhes do quadro:\n"
     "  roxo      flags (inserção de bits/bytes) ou cabeçalho (contagem)\n"
+    "  roxo/vermelho alternados  colunas da matriz (entrelaçamento)\n"
     "  azul-petróleo  byte ESC inserido (inserção de bytes)\n"
     "  vermelho  bits do EDC (paridade, checksum, CRC ou Hamming)\n"
     "  fundo vermelho  bit que chegou diferente do enviado\n\n"

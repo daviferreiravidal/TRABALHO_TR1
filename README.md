@@ -19,8 +19,13 @@ hermes/               interface gráfica GTK 4
 texto -> bits -> EDC -> ENQUADRAMENTO -> 1º CODIFICAÇÃO -> 2º MODULAÇÃO -> canal AWGN
                 (Nenhum, Paridade,     (Contagem,        (NRZ polar,       (Nenhuma, ASK,
                  Checksum, CRC-32,      Inserção de       Manchester,       FSK, 8-PSK,
-                 Hamming)               bytes / de bits)  Bipolar)          32-QAM)
+                 Hamming)               bytes / de bits,  Bipolar)          32-QAM)
+                                        Entrelaçamento)
 ```
+
+O **entrelaçamento** usa quadros de tamanho fixo (sem FLAG nem cabeçalho): payload+EDC é
+escrito numa matriz de 8 colunas linha por linha e enviado coluna por coluna; o receptor,
+que sabe o tamanho do quadro pela configuração, corta o fluxo e desfaz a matriz.
 
 Toda modulação funciona com toda codificação: o modulador recebe o sinal **já codificado**
 (um nível -V, 0 ou +V por *chip*; Manchester tem 2 chips por bit) e:

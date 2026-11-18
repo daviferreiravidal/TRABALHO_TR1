@@ -346,6 +346,15 @@ class PainelDetalhes(Gtk.Box):
                 segs.append((byte, tag) if tag else (byte,))
                 segs.append((" ",))
             return segs
+        if cfg.enquadramento == "Entrelaçamento":
+            # uma coluna da matriz por grupo, na ordem em que vai para o canal
+            col = sim.entrelacamento.NUM_COLUNAS
+            linhas = len(quadro) // col
+            segs = []
+            for c in range(col):
+                segs += [(quadro[c * linhas:(c + 1) * linhas], "cabecalho" if c % 2 else "flag"),
+                         (" ",)]
+            return segs
         if cfg.enquadramento == "Inserção de bits":
             f = len(sim.insercaoBits.FLAG)
             return [(quadro[:f], "flag"), (" ",), (quadro[f:-f],), (" ",), (quadro[-f:], "flag")]
@@ -377,8 +386,23 @@ class PainelDetalhes(Gtk.Box):
         segs += self._campos_dados(q["dados"], cfg)
         segs += [("\n\n",), ("Quadro       ", "rotulo"), (f"({len(q['quadro'])} bits)\n  ",)]
         segs += self._campos_quadro(q["quadro"], cfg)
+        if cfg.enquadramento == "Entrelaçamento":
+            segs += self._matriz_entrelacamento(q["dados"])
         segs += [("\n\n",), ("Hex dump do payload\n", "rotulo"), (self._hexdump(q["payload"]),)]
         self._escrever(segs)
+
+    @staticmethod
+    def _matriz_entrelacamento(dados):
+        """A matriz do entrelaçamento: escrita por linha, lida por coluna."""
+        col = sim.entrelacamento.NUM_COLUNAS
+        dados = dados + "0" * (-len(dados) % col)
+        segs = [("\n  (cada grupo é uma coluna da matriz)\n\n", "legenda"),
+                ("Matriz         ", "rotulo"),
+                (f"({len(dados) // col} linhas x {col} colunas; escrita por linha, "
+                 f"lida por coluna)\n", "legenda")]
+        for i in range(0, len(dados), col):
+            segs.append(("  " + " ".join(dados[i:i + col]) + "\n",))
+        return segs
 
     def mostrar_rx(self, i, q, cfg, q_tx=None):
         status = q["status"].upper()
